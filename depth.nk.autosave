@@ -1,0 +1,1165 @@
+#! C:/Program Files/Nuke11.3v1/nuke-11.3.1.dll -nx
+version 11.3 v1
+define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
+<layout version="1.0">
+    <window x="2552" y="352" w="1920" h="1057" maximized="1" screen="1">
+        <splitter orientation="1">
+            <split size="40"/>
+            <dock id="" hideTitles="1" activePageId="Toolbar.1">
+                <page id="Toolbar.1"/>
+            </dock>
+            <split size="1257" stretch="1"/>
+            <splitter orientation="2">
+                <split size="592"/>
+                <dock id="" activePageId="Viewer.1" focus="true">
+                    <page id="Viewer.1"/>
+                </dock>
+                <split size="417"/>
+                <dock id="" activePageId="DAG.1">
+                    <page id="DAG.1"/>
+                    <page id="Curve Editor.1"/>
+                    <page id="DopeSheet.1"/>
+                </dock>
+            </splitter>
+            <split size="615"/>
+            <dock id="" activePageId="Properties.1">
+                <page id="Properties.1"/>
+                <page id="uk.co.thefoundry.backgroundrenderview.1"/>
+            </dock>
+        </splitter>
+    </window>
+</layout>
+}
+Root {
+ inputs 0
+ name C:/Users/lukas/Desktop/kernel/depth.nk
+ frame 55
+ fps 25
+ format "1920 1080 0 0 1920 1080 1 HD_1080"
+ proxy_type scale
+ proxy_format "1024 778 0 0 1024 778 1 1K_Super_35(full-ap)"
+ colorManagement OCIO
+ OCIO_config custom
+ customOCIOConfigPath C:/Users/lukas/.nuke/_ACES/aces_1.0.3_L/config.ocio
+ defaultViewerLUT "OCIO LUTs"
+ workingSpaceLUT "ACES - ACEScg"
+ monitorLut ACES/sRGB
+ int8Lut "Utility - sRGB - Texture"
+ int16Lut "ACES - ACEScc"
+ logLut "Input - ADX - ADX10"
+ floatLut "ACES - ACEScg"
+}
+Constant {
+ inputs 0
+ channels rgb
+ format "100 100 0 0 100 100 1 bokeh"
+ name Constant1
+ xpos -91
+ ypos -303
+}
+Radial {
+ area {0 0 100 100}
+ softness 0.125
+ name Radial1
+ xpos -91
+ ypos -231
+}
+Reformat {
+ type scale
+ scale 0.58
+ name Reformat1
+ xpos -91
+ ypos -198
+}
+set N46f40800 [stack 0]
+CheckerBoard2 {
+ inputs 0
+ name CheckerBoard1
+ xpos 306
+ ypos -346
+}
+set N46f40000 [stack 0]
+push $N46f40000
+Noise {
+ inputs 1+1
+ premult all
+ gain 0.96
+ gamma 0
+ center {960 540}
+ name Noise1
+ xpos 559
+ ypos -307
+}
+set N46f41c00 [stack 0]
+push $N46f41c00
+BlinkScript {
+ inputs 3
+ kernelSourceFile //apollo/ProjectData/projects/Nuke_Bokeh/bokeh.cpp
+ recompileCount 1
+ ProgramGroup 1
+ KernelDescription "2 \"ConvolutionKernel\" iterate pixelWise 8a63fff54b93e08aa8c8766696dcb505bd8ebc5f0260dbdf2cf5abf1b183a1d9 4 \"src_2\" Read Random \"src\" Read Ranged2D \"bokeh\" Read Random \"result\" Write Point 2 \"strength\" Float 1 AACAPw== \"cut\" Float 1 AACAPw== 2 \"b_strength\" 1 1 \"b_cut\" 1 1 4 \"srcrangeMin\" Int 2 1 AAAAAAAAAAA= \"srcrangeMax\" Int 2 1 AAAAAAAAAAA= \"bokehOffset\" Int 2 1 AAAAAAAAAAA= \"srcbound\" Int 2 1 AAAAAAAAAAA="
+ kernelSource "kernel ConvolutionKernel : public ImageComputationKernel<ePixelWise>\n\{\n\n  Image<eRead, eAccessRandom> src_2;\n  Image<eRead, eAccessRanged2D, eEdgeClamped> src;\n  Image<eRead, eAccessRandom> bokeh;  \n  Image<eWrite> result;\n\nlocal:\n  int2 bokehOffset;\n  int2 srcbound;\n \nparam: \n  float b_strength;\n  float b_cut;\n\n\n\n\n  void define() \{\n    defineParam(b_strength, \"strength\", 1.0f);\n    defineParam(b_cut, \"cut\",  1.0f);\n\n  \}\n\n\n\n  void init()\n  \{\n    //Get the size of the filter input and store the radius.\n    int2 filterRadius(bokeh.bounds.width()/2, bokeh.bounds.height()/2); \n\n    //Store the offset of the bottom-left corner of the filter image\n    //from the current pixel:\n    bokehOffset.x = bokeh.bounds.x1 - filterRadius.x;\n    bokehOffset.y = bokeh.bounds.y1 - filterRadius.y;\n\t\n\t\n\tsrcbound.x = src_2.bounds.x2;\n\tsrcbound.y = src_2.bounds.y2;\n\t\n    \n    //Set up the access for the src image\n    src.setRange(-filterRadius.x, -filterRadius.y, filterRadius.x, filterRadius.y);\n  \}\n\n  void process(int2 pos) \{\n\t \n\tSampleType(src) value(0);\n\t\n\tvalue = bokeh_filter(pos);\n\t\n\t\n    \n    result() = value;\n  \}\n\n  \n  \n  \n  \n  float4 bokeh_filter(int2 pos) \{\n\t  \n\tfloat2 offset;\n\tfloat2 direction;\n\tfloat strength;\n\tfloat strength_inv;\n\tfloat rel;\n\t\n\tfloat2 relative;\n\n\t  \n    SampleType(src) valueSum(0);\n    ValueType(bokeh) filterSum(0);\n\t\n\toffset.x = ((float)(pos.x *2   - srcbound.x)) /srcbound.x;\n\toffset.y = ((float)(pos.y *2  - srcbound.y)) /srcbound.y;\n\n\tdirection = normalize(offset);\n\tstrength = fabs(length(offset)) / sqrt(2);\n\tstrength_inv = (strength - 1 )* -1;\n\t\n\t\n\t\n\t\n\t\t//Iterate over the filter image\n    for(int j = bokeh.bounds.y1; j < bokeh.bounds.y2; j++) \{\n\t  relative.y =  ((float)( j - bokeh.bounds.y1) / (float)(bokeh.bounds.y2 - bokeh.bounds.y1) + (direction.y * (strength) * b_strength)) * 2 - 1 ;\n      \n\t  for(int i = bokeh.bounds.x1; i < bokeh.bounds.x2; i++) \{\n\t    relative.x = ((float)( i - bokeh.bounds.x1) / (float)(bokeh.bounds.x2 - bokeh.bounds.y1) + (direction.x * (strength) * b_strength)) * 2 - 1 ;\n        //Get the filter value\n\t\t\n\t\trel = fabs(length(relative));\n\t\t\n\t\tif( rel > b_cut )\{  //size of the ring relative to the bokeh image\n\t\t\t\n\t\t\}\n\t\telse\{\n\t\t\t\n\n          ValueType(bokeh) bokeh_val = bokeh(i, j, 0);\n\t\t\n\t\t\n\t\t  valueSum += bokeh_val * src(i + bokehOffset.x, j + bokehOffset.y);\n          filterSum += bokeh_val;\n\t\t\n\t\t\}\n      \}\n    \}\n\n    if (filterSum != 0) \n      valueSum /=  filterSum;\n\t\n\treturn valueSum;\n  \}\n  \n  \n\};"
+ rebuild ""
+ ConvolutionKernel_strength 0.66
+ ConvolutionKernel_cut 0.81
+ rebuild_finalise ""
+ name BlinkScript1
+ xpos 580
+ ypos -190
+}
+Ramp {
+ inputs 0
+ p1 {1110 856}
+ name Ramp1
+ xpos 151
+ ypos -282
+}
+push $N46f40800
+push $N46f40000
+BlinkScript {
+ inputs 3
+ kernelSourceFile C:/Users/lukas/Desktop/kernel/depth.cpp
+ recompileCount 29
+ ProgramGroup 1
+ KernelDescription "2 \"DepthBlurKernel\" iterate pixelWise c1be1e4e8c7b2fc6ff4d5b129f449cd4316a1ab3447baa1825c2f81889782f6d 4 \"src\" Read Ranged2D \"bokeh\" Read Random \"depth\" Read Random \"dst\" Write Point 1 \"focus\" Float 2 AAAAAAAAAAA= 1 \"focus\" 2 1 4 \"srcrangeMin\" Int 2 1 AAAAAAAAAAA= \"srcrangeMax\" Int 2 1 AAAAAAAAAAA= \"maxDepthSize\" Float 1 1 AAAAAA== \"_bokehOffset\" Int 2 1 AAAAAAAAAAA="
+ kernelSource "kernel DepthBlurKernel : ImageComputationKernel<ePixelWise>\n\{\n  Image<eRead, eAccessRanged2D, eEdgeClamped> src;\n  Image<eRead, eAccessRandom> bokeh;\n  Image<eRead, eAccessRandom> depth;\n  Image<eWrite> dst;  //the output image\n\nparam:\n  float2 focus;\n\nlocal:\n  float maxDepthSize;\n  int2 _bokehOffset;\n\n  //In define(), parameters can be given labels and default values.\n  void define() \{\n  \}\n\n  //The init() function is run before any calls to process().\n  void init() \{\n      int2 bokehRadius(bokeh.bounds.width()/2, bokeh.bounds.height()/2);\n\n//Store the offset of the bottom-left corner of the bokeh image\n//from the current pixel:\n      _bokehOffset\[0] = bokeh.bounds.x1 - bokehRadius\[0];\n      _bokehOffset\[1] = bokeh.bounds.y1 - bokehRadius\[1];\n      maxDepthSize = 15.0f;\n      src.setRange(-maxDepthSize, maxDepthSize);\n  \}\n\n  //The process function is run at every pixel to produce the output.\n  void process(int2 pos) \{\n    //Get the depth at the current pixel\n        SampleType(src) valueSum(0);\n        ValueType(bokeh) bokehSum(0);\n        float z;\n\n        //Iterate over the bokeh image\n        for(int j = -maxDepthSize; j < maxDepthSize; j++) \{\n          for(int i = -maxDepthSize; i < maxDepthSize; i++) \{\n\n           z = depth(pos.x+j,pos.y+i,0);\n\n            if (z > j && z > i && z > 1 ) \{\n\n                float2 bokehPos = (i + _bokehOffset\[0]*(i/z),j + _bokehOffset\[1]*(j/z));\n\n                ValueType(bokeh) bokehVal = bokeh( bokehPos.x,  bokehPos.y, 0);\n\n\n                valueSum += bokehVal * src(i + _bokehOffset\[0], j + _bokehOffset\[1]);\n\n\n                bokehSum += bokehVal;\n\n            \}\n            else \{\n                valueSum += src(i + _bokehOffset\[0], j + _bokehOffset\[1]);\n            \}\n          \}\n        \}\n\n        //Normalise the value sum, avoiding division by zero\n        if (bokehSum != 0)\n          valueSum /= bokehSum;\n\n    dst() = valueSum;\n\n  \}\n\};\n"
+ useGPUIfAvailable false
+ rebuild ""
+ rebuild_finalise ""
+ name BlinkScript2
+ xpos 306
+ ypos -165
+}
+push 0
+push 0
+push 0
+push 0
+Camera2 {
+ inputs 0
+ translate {0 0 2.769999981}
+ name Camera1
+ xpos -804
+ ypos -232
+}
+CheckerBoard2 {
+ inputs 0
+ name CheckerBoard3
+ xpos -657
+ ypos -581
+}
+set N6a425000 [stack 0]
+Grade {
+ white {0.194338 0.573768 1 1}
+ white_panelDropped true
+ name Grade7
+ xpos -592
+ ypos -480
+}
+Card2 {
+ translate {-2.640000105 0 -4.619999886}
+ rotate {0 29.17551162 0}
+ uniform_scale 6
+ control_points {3 3 3 6 
+
+1 {-0.5 -0.5 0} 0 {0.1666666865 0 0} 0 {0 0 0} 0 {0 0.1666666865 0} 0 {0 0 0} 0 {0 0 0} 
+1 {0 -0.5 0} 0 {0.1666666716 0 0} 0 {-0.1666666716 0 0} 0 {0 0.1666666865 0} 0 {0 0 0} 0 {0.5 0 0} 
+1 {0.5 -0.5 0} 0 {0 0 0} 0 {-0.1666666865 0 0} 0 {0 0.1666666865 0} 0 {0 0 0} 0 {1 0 0} 
+1 {-0.5 0 0} 0 {0.1666666865 0 0} 0 {0 0 0} 0 {0 0.1666666716 0} 0 {0 -0.1666666716 0} 0 {0 0.5 0} 
+1 {0 0 0} 0 {0.1666666716 0 0} 0 {-0.1666666716 0 0} 0 {0 0.1666666716 0} 0 {0 -0.1666666716 0} 0 {0.5 0.5 0} 
+1 {0.5 0 0} 0 {0 0 0} 0 {-0.1666666865 0 0} 0 {0 0.1666666716 0} 0 {0 -0.1666666716 0} 0 {1 0.5 0} 
+1 {-0.5 0.5 0} 0 {0.1666666865 0 0} 0 {0 0 0} 0 {0 0 0} 0 {0 -0.1666666865 0} 0 {0 1 0} 
+1 {0 0.5 0} 0 {0.1666666716 0 0} 0 {-0.1666666716 0 0} 0 {0 0 0} 0 {0 -0.1666666865 0} 0 {0.5 1 0} 
+1 {0.5 0.5 0} 0 {0 0 0} 0 {-0.1666666865 0 0} 0 {0 0 0} 0 {0 -0.1666666865 0} 0 {1 1 0} }
+ name Card2
+ xpos -583
+ ypos -414
+}
+push $N6a425000
+Grade {
+ white {1 0.24812 0.20929 1}
+ white_panelDropped true
+ name Grade6
+ xpos -723
+ ypos -480
+}
+Card2 {
+ translate {1.715629697 0 -14.07808304}
+ rotate {0 -44.08522036 0}
+ uniform_scale 6
+ control_points {3 3 3 6 
+
+1 {-0.5 -0.5 0} 0 {0.1666666865 0 0} 0 {0 0 0} 0 {0 0.1666666865 0} 0 {0 0 0} 0 {0 0 0} 
+1 {0 -0.5 0} 0 {0.1666666716 0 0} 0 {-0.1666666716 0 0} 0 {0 0.1666666865 0} 0 {0 0 0} 0 {0.5 0 0} 
+1 {0.5 -0.5 0} 0 {0 0 0} 0 {-0.1666666865 0 0} 0 {0 0.1666666865 0} 0 {0 0 0} 0 {1 0 0} 
+1 {-0.5 0 0} 0 {0.1666666865 0 0} 0 {0 0 0} 0 {0 0.1666666716 0} 0 {0 -0.1666666716 0} 0 {0 0.5 0} 
+1 {0 0 0} 0 {0.1666666716 0 0} 0 {-0.1666666716 0 0} 0 {0 0.1666666716 0} 0 {0 -0.1666666716 0} 0 {0.5 0.5 0} 
+1 {0.5 0 0} 0 {0 0 0} 0 {-0.1666666865 0 0} 0 {0 0.1666666716 0} 0 {0 -0.1666666716 0} 0 {1 0.5 0} 
+1 {-0.5 0.5 0} 0 {0.1666666865 0 0} 0 {0 0 0} 0 {0 0 0} 0 {0 -0.1666666865 0} 0 {0 1 0} 
+1 {0 0.5 0} 0 {0.1666666716 0 0} 0 {-0.1666666716 0 0} 0 {0 0 0} 0 {0 -0.1666666865 0} 0 {0.5 1 0} 
+1 {0.5 0.5 0} 0 {0 0 0} 0 {-0.1666666865 0 0} 0 {0 0 0} 0 {0 -0.1666666865 0} 0 {1 1 0} }
+ name Card1
+ xpos -732
+ ypos -415
+}
+Scene {
+ inputs 2
+ name Scene1
+ xpos -661
+ ypos -322
+}
+push 0
+ScanlineRender {
+ inputs 3
+ conservative_shader_sampling false
+ motion_vectors_type distance
+ name ScanlineRender1
+ xpos -671
+ ypos -175
+ addUserKnob {20 Mackevision}
+ addUserKnob {7 renderSamples}
+ renderSamples 7
+ addUserKnob {7 guiSamples +HIDDEN}
+ guiSamples 1
+}
+set N6c3e5c00 [stack 0]
+Group {
+ name OpticalZDefocus
+ help "<b>OpticalZDefocus</b> is a physically accurate ZDefocus, which controls circle of confusion (coc) size based on lens geometry using the depth of field equation. \n\nSet your lens and film-back characteristics, your focus distance, and adjust the size of your bokeh with the aperture size, just like a real lens."
+ tile_color 0xcc804eef
+ xpos -904
+ ypos -56
+ addUserKnob {20 OpticalZDefocus}
+ addUserKnob {41 channels T _ZDEFOCUS_.channels}
+ addUserKnob {41 useGPUIfAvailable l "Use GPU if available" T _ZDEFOCUS_.useGPUIfAvailable}
+ addUserKnob {26 ""}
+ addUserKnob {41 depth_channel l "depth channel" t "Choose the channel that contains your Z-Depth" T CHANNEL_CHOOSER_DEPTH.Zchan}
+ addUserKnob {26 spacer l " &nbsp;  &nbsp;  " -STARTLINE T " "}
+ addUserKnob {6 unpremult_z l " &nbsp;  &nbsp; <b>unpremult</b> by" t "Unpremultiply the depth layer by the selected channel" -STARTLINE}
+ unpremult_z true
+ addUserKnob {41 depth_alpha l "" -STARTLINE T CHANNEL_CHOOSER_ALPHA.Zchan}
+ addUserKnob {22 set_z l "Sample Z" t "Sets the focal distance to the Z channel value at the current focal point on the current frame." T "from __future__ import with_statement\n\nn = nuke.thisNode()\ns = n\['s']\nz_coord = n\['sample_z']\n\nwith n:\n    ds = nuke.toNode('DepthSampler')\n    zsample = ds.sample('red', z_coord.getValue(0), z_coord.getValue(1))\n\nif s.isAnimated():\n    s.setValueAt(zsample, nuke.frame())\nelse:\n    s.setValue(zsample)" +STARTLINE}
+ addUserKnob {12 sample_z l "&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; sample position: " t "Allows you to sample the Z channel at a specific 2d position." -STARTLINE}
+ sample_z {988.5 642.5}
+ addUserKnob {4 depth_unit l "depth unit" t "Set the unit of your zdepth." M {mm cm dm m inch ft}}
+ depth_unit cm
+ addUserKnob {26 spacer2 l "" t " " -STARTLINE T "  "}
+ addUserKnob {6 show_coc l "show coc" t "Output the calculated direct circle of confusion size map that is used to drive the ZDefocus in direct mode.\n\nUseful for troubleshooting." -STARTLINE}
+ show_coc true
+ addUserKnob {6 invert_depth l depth=1/z t "Invert the depth if your input is Nuke ScanlineRender style 1/Z" -STARTLINE}
+ invert_depth true
+ addUserKnob {4 defocus_mode l "&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; @b;mode" t "Choose whether to use ZDefocus or pgBokeh" -STARTLINE M {ZDefocus pgBokeh "" "" "" "" "" "" ""}}
+ addUserKnob {26 divider l " " T "  "}
+ addUserKnob {26 ""}
+ addUserKnob {26 dof_control_label l " " T "<font color=#ddd><b>Depth of Field Control"}
+ addUserKnob {7 s l "focus distance" t "Set the focus distance" R 10 1000}
+ s 22.37989998
+ addUserKnob {7 N l f-stop t "Controls the aperture of your lens.\n\nBigger number = greater depth of field. \n\nSmaller numbers = shallower depth of field." R 0.8 44}
+ N 40.6
+ addUserKnob {26 ""}
+ addUserKnob {26 lens_geometry_label l " " T "<font color=#ddd><b>Lens Geometry"}
+ addUserKnob {22 get_selected_camera l "Get Selected Camera" t "Set the parameters using the selected camera." T "from __future__ import with_statement\n\ndef get_camera():\n    ozdef = nuke.thisNode()\n    with nuke.root():\n        root_par = nuke.root().format().pixelAspect()\n        cam = nuke.selectedNodes()\n        if len(cam) != 1:\n            nuke.message('Please select a single camera node.')\n            return\n        elif len(cam) == 0:\n            nuke.message('Please select a single camera node.')\n            return\n        else:\n            cam = cam\[0]\n        if 'Camera2' not in cam.Class():\n            nuke.message('Please select a camera node.')\n            return\n        ozdef\['f'].setValue(cam\['focal'].getValue())\n        ozdef\['N'].setValue(cam\['fstop'].getValue())\n        # Assuming anamorphic shows have physical haperture*2\n        ozdef\['haperture'].setValue(cam\['haperture'].getValue()/root_par)\n\nif __name__ == \"__main__\":\n    get_camera()" +STARTLINE}
+ addUserKnob {41 use_camera_input l "use camera input" -STARTLINE T _ghost_whisper_.use_camera_input}
+ addUserKnob {7 f l "focal length" t "Set the focal length of the camera" R 0 500}
+ f 50
+ addUserKnob {7 haperture l "Sensor width" t "Horizontal aperture of the film-back / sensor" R 0 50}
+ haperture 36
+ addUserKnob {26 ""}
+ addUserKnob {26 ZDefocus2 l " " T "<font color=#ddd><b>ZDefocus"}
+ addUserKnob {41 max_size l "max defocus" t "Set the max defocus size allowed" T _ZDEFOCUS_.max_size}
+ addUserKnob {41 constant_defocus l "constant defocus" t "If enabled, depth-varying defocus is disabled and defocus amount is controlled directly by the max defocus slider." T _ghost_whisper_.constant_defocus}
+ addUserKnob {41 autoLayerSpacing l "automatic layer spacing" T _ZDEFOCUS_.autoLayerSpacing}
+ addUserKnob {41 layers l "depth layers" T _ZDEFOCUS_.layers}
+ addUserKnob {41 blur_dof l "blur inside" -STARTLINE T _ZDEFOCUS_.blur_dof}
+ addUserKnob {41 layerCurve l "layer curve" T _ZDEFOCUS_.layerCurve}
+ addUserKnob {26 ""}
+ addUserKnob {26 pgBokeh2 l " " T "<font color=#ddd><b>pgBokeh"}
+ addUserKnob {41 use_deep l "use deep" T _ghost_whisper_.use_deep}
+ addUserKnob {41 frontmultiplier l "Front Multiplier" T _pgBokeh_.frontmultiplier}
+ addUserKnob {41 backmultiplier l "Back Multiplier" T _pgBokeh_.backmultiplier}
+ addUserKnob {3 pgDepthSlices l "Depth Slices"}
+ pgDepthSlices 10
+ addUserKnob {26 ""}
+ addUserKnob {7 min_zdepth l "min zdepth" t "If ZDepth = 0, ZDepth will be set to the specified value.\n\nThe ZDefocus node can be very slow to calculate if you have zero values in your zdepth, for example if you have areas that have transparent alpha. \n\nSet min zdepth to a value slightly smaller than the nearest object in your scene to speed up processing time." R 0 20}
+ min_zdepth 1e-07
+ addUserKnob {6 remove_outside l "remove outside pixels" +STARTLINE}
+ remove_outside true
+ addUserKnob {6 blackoutside l "black outside" -STARTLINE}
+ addUserKnob {20 Filter}
+ addUserKnob {26 ZDefocusLabel l " " T "<font color=#ddd><b>ZDefocus"}
+ addUserKnob {41 filter_type_1 l "filter type" T _ZDEFOCUS_.filter_type}
+ addUserKnob {7 filter_shape}
+ filter_shape 1
+ addUserKnob {7 roundness}
+ roundness 0.2
+ addUserKnob {41 bloom_gamma l "gamma correction" T _ZDEFOCUS_.bloom_gamma}
+ addUserKnob {41 bloom_1 l bloom -STARTLINE T _ZDEFOCUS_.bloom}
+ addUserKnob {41 bloom_threshold l "bloom threshold" T _ZDEFOCUS_.bloom_threshold}
+ addUserKnob {41 bloom_gain l "bloom gain" T _ZDEFOCUS_.bloom_gain}
+ addUserKnob {26 ""}
+ addUserKnob {26 pgBokeh l " " T "<font color=#ddd><b>pgBokeh"}
+ addUserKnob {41 kernelType l "Kernel Type" T _pgBokeh_.kernelType}
+ addUserKnob {41 kSoftness l Softness T _pgBokeh_.kSoftness}
+ addUserKnob {41 kCurvature l Curvature T _pgBokeh_.kCurvature}
+ addUserKnob {41 kRotation l Rotation T _pgBokeh_.kRotation}
+ addUserKnob {41 bloom l Bloom T _pgBokeh_.bloom}
+ addUserKnob {41 bloomThreshold l "Bloom Threshold" T _pgBokeh_.bloomThreshold}
+ addUserKnob {41 kSphAbb l "Spherical Aberration" T _pgBokeh_.kSphAbb}
+ addUserKnob {41 kChrAbb l "Chromic Aberration" T _pgBokeh_.kChrAbb}
+ addUserKnob {26 ""}
+ addUserKnob {26 Overall l " " T "<font color=#ddd><b>Overall"}
+ addUserKnob {3 blades}
+ blades 8
+ addUserKnob {7 aspect_ratio R 0.01 2}
+ aspect_ratio 1
+ addUserKnob {7 image_angle l "Custom Tex angle" R -180 180}
+ image_angle 6
+ addUserKnob {26 textLensKernel l "" +STARTLINE T "This section should also control the LensKernelFFT"}
+}
+ ZBlur {
+  inputs 0
+  channels rgba
+  shape 1
+  name CHANNEL_CHOOSER_DEPTH
+  xpos -347
+  ypos 272
+  disable true
+ }
+ ZBlur {
+  channels rgba
+  Zchan rgba.alpha
+  shape 1
+  name CHANNEL_CHOOSER_ALPHA
+  xpos -347
+  ypos 320
+  disable true
+ }
+ Input {
+  inputs 0
+  name Input
+  label "\[value number]"
+  xpos -260
+  ypos -52
+ }
+ Dot {
+  name Dot8
+  xpos -226
+ }
+set N6c3e4c00 [stack 0]
+ Crop {
+  box {0 0 {input.width} {input.height}}
+  crop false
+  name Crop1
+  xpos -128
+  ypos 20
+ }
+push $N6c3e4c00
+ Merge2 {
+  inputs 2
+  bbox intersection
+  name Merge1
+  xpos -147
+  ypos 60
+  disable {{!parent.remove_outside x1011 1}}
+ }
+push $N6c3e4c00
+ CopyBBox {
+  inputs 2
+  name CopyBBox2
+  xpos -260
+  ypos 60
+ }
+ Crop {
+  box {0 0 {input.width} {input.height}}
+  name Crop2
+  xpos -260
+  ypos 86
+  disable {{!parent.blackoutside}}
+ }
+ Dot {
+  name _ghost_whisper_
+  knobChanged "\n\n\nthisknob = nuke.thisKnob()\nnode = nuke.thisNode()\nnuke.root().begin()\nparent_node = nuke.toNode(node.fullName().split('.')\[0])\nparent_node.begin()\n\ndef enable_knobs(enabled=True, caminput=False):\n    if caminput:\n        knobs = \['get_selected_camera', 'f', 'haperture']\n    else:\n        knobs = \['min_zdepth', 'get_selected_camera', 'f', 'N', 'haperture', 's', 'use_deep', 'use_camera_input']\n    for knob in knobs:\n        parent_node\[knob].setEnabled(enabled)\n\nif thisknob.name() == 'constant_defocus':\n    is_const = node\['constant_defocus'].getValue()\n    constant_defocus_switch = nuke.toNode('CONSTANT_DEFOCUS_SWITCH')\n    choose_channels = nuke.toNode('_CHOOSE_CHANNELS_')\n    constant_defocus_in = nuke.toNode('CONSTANT_DEFOCUS_IN')\n    if is_const:\n        enable_knobs(False)\n        parent_node\['defocus_mode'].setValue(0)\n        constant_defocus_switch.setInput(0,constant_defocus_in)\n    else:\n        enable_knobs()\n        constant_defocus_switch.setInput(0,choose_channels) \n              \nif thisknob.name() == 'use_camera_input':\n    if thisknob.getValue():\n        enable_knobs(False, True)\n        cam_input = nuke.nodes.Input(name='InputCamera', xpos=228, ypos=-16)\n        cam_input_number = int(cam_input.knob('number').getValue())\n        parent_node\['f'].setExpression('\[topnode input'+str(cam_input_number)+'].focal')\n        parent_node\['haperture'].setExpression('\[topnode input'+str(cam_input_number)+'].haperture')\n        \n    if not thisknob.getValue():\n        if not parent_node\['constant_defocus'].getValue():\n            enable_knobs(True, True)\n        cam_input = nuke.toNode('InputCamera')\n        cam_input_number = int(cam_input.knob('number').getValue())\n        parent_node.setInput(cam_input_number, None)\n        nuke.delete(cam_input)\n        parent_node\['f'].clearAnimated()\n        parent_node\['haperture'].clearAnimated()\n        \n        if cam_input_number == 2 and node.knob('use_deep').getValue():\n            nuke.toNode('InputDeep').knob('number').setValue(2)\n            \n\nif thisknob.name() == 'use_deep':\n    pgBokeh = nuke.toNode('_pgBokeh_')\n    if thisknob.getValue():\n        deep_input = nuke.nodes.Input(name='InputDeep', xpos=-400, ypos=-16)    \n        pgBokeh.setInput(3, deep_input)\n        parent_node\['defocus_mode'].setValue(1)\n               \n        \n    if not thisknob.getValue():\n        deep_input = nuke.toNode('InputDeep')\n        deep_input_number = int(deep_input.knob('number').getValue())\n        pgBokeh.setInput(deep_input_number, None)\n        nuke.delete(deep_input)  \n        \n        if deep_input_number == 2 and node.knob('use_camera_input').getValue():\n            cam_input_number = 2\n            parent_node.setInput(2, parent_node.input(3))            \n            parent_node.setInput(3, None)\n            nuke.toNode('InputCamera').knob('number').setValue(cam_input_number)\n            parent_node\['f'].setExpression('\[topnode input'+str(cam_input_number)+'].focal')\n            parent_node\['haperture'].setExpression('\[topnode input'+str(cam_input_number)+'].haperture')\n        \n\n"
+  tile_color 0x129000ff
+  note_font_size 42
+  note_font_color 0x7f7f7f01
+  xpos -226
+  ypos 114
+  addUserKnob {20 User}
+  addUserKnob {6 constant_defocus t "Disables depth-varying defocus. \nBokeh size is directly controlled by max defocus." +STARTLINE}
+  addUserKnob {6 use_camera_input l "use camera input" t "Creates a camera input pipe instead so that no user action is required." +STARTLINE}
+  addUserKnob {6 use_deep l "use deep" t "use Deep Data, only usable with pgBokeh" +STARTLINE}
+ }
+set N6a34b800 [stack 0]
+ Dot {
+  name Dot7
+  note_font_size 42
+  note_font_color 0x7f7f7f01
+  xpos -556
+  ypos 114
+ }
+ AddChannels {
+  channels depth
+  channels2 rgba
+  name AddChannels1
+  xpos -590
+  ypos 152
+ }
+set N6a34b000 [stack 0]
+push $N6a34b000
+ Copy {
+  inputs 2
+  from0 {{{CHANNEL_CHOOSER_DEPTH.Zchan}}}
+  to0 rgba.red
+  from1 {{{CHANNEL_CHOOSER_ALPHA.Zchan}}}
+  to1 rgba.alpha
+  bbox B
+  name _CHOOSE_CHANNELS_
+  xpos -590
+  ypos 201
+  disable {{hasError}}
+ }
+ NoOp {
+  name CONSTANT_DEFOCUS_SWITCH
+  xpos -590
+  ypos 263
+ }
+ Unpremult {
+  name _UNPREMULT_Z_
+  xpos -590
+  ypos 297
+  disable {{!parent.unpremult_z}}
+ }
+ Expression {
+  temp_name3 max_dist
+  temp_expr3 1000000000
+  expr0 "r == 0 ? max_dist : 1/r"
+  channel1 none
+  channel2 none
+  name DepthInvert
+  xpos -590
+  ypos 351
+  disable {{!parent.invert_depth}}
+ }
+set N6a34a000 [stack 0]
+ NoOp {
+  name DepthSampler
+  xpos -700
+  ypos 351
+  addUserKnob {20 User}
+  addUserKnob {7 sval R 0 1000}
+ }
+ CopyBBox {
+  inputs 0
+  name CopyBBox1
+  xpos -160
+  ypos 1166
+ }
+push $N6a34b000
+ NoOp {
+  name CONSTANT_DEFOCUS_IN
+  xpos -456
+  ypos 216
+ }
+ Read {
+  inputs 0
+  file_type png
+  file //data/int-ham-lib-assets/ASSETS-ELEMENTS/_MACKEVISION/misc/Elements/Iris_Big-Spots.png
+  format "204 209 0 0 204 209 1 "
+  origset true
+  in_colorspace linear
+  out_colorspace linear
+  name Read3
+  xpos 715
+  ypos -320
+  addUserKnob {20 Mackevision}
+  addUserKnob {4 versions l Versions: M {""}}
+  addUserKnob {26 missing l "Missing Frames:" T "not yet set"}
+  addUserKnob {22 checkVersions l "check for Versions" -STARTLINE T "x=nuke.thisNode()\nimport pyseq\nimport srNelper\nseq = pyseq.img2pyseq(x\['file'].evaluate())\nsrNelper.refresh(x,seq,versions=True)"}
+ }
+push $N6a34a000
+ Multiply {
+  channels rgb
+  value {{"parent.depth_unit == 1 ? 10 : parent.depth_unit == 2 ? 100 : parent.depth_unit == 3 ? 1000 : parent.depth_unit == 4 ? 25.4 : parent.depth_unit == 5 ? 304.8 : 1"}}
+  name _UNIT_MULTIPLIER_
+  xpos -590
+  ypos 399
+  addUserKnob {20 User}
+  addUserKnob {7 depth_unit_divider R 0 500}
+  depth_unit_divider {{"parent.depth_unit == 1 ? 10 : parent.depth_unit == 2 ? 100 : parent.depth_unit == 3 ? 1000 : parent.depth_unit == 4 ? 25.4 : parent.depth_unit == 5 ? 304.8 : 1"}}
+ }
+ Expression {
+  temp_name0 zdepth
+  temp_expr0 "r < parent.min_zdepth* _UNIT_MULTIPLIER_.value ? parent.min_zdepth* _UNIT_MULTIPLIER_.value : r"
+  temp_name1 focus_dist
+  temp_expr1 "s * _UNIT_MULTIPLIER_.value"
+  temp_name2 coc
+  temp_expr2 "(focus_dist - zdepth) * pow(f,2) / (N * zdepth * (focus_dist - f))"
+  temp_name3 coc_px
+  temp_expr3 "(coc / haperture * input.width / 2)*-1"
+  channel0 rgba
+  expr0 "parent.constant_defocus ? parent.max_size : coc_px"
+  channel1 none
+  name Generate_Direct_Z
+  xpos -590
+  ypos 425
+  addUserKnob {20 Optical l "Optical Characteristics"}
+  addUserKnob {7 f l "focal length" R 0 500}
+  f {{parent.f}}
+  addUserKnob {7 N l f-stop R 0 44}
+  N {{parent.N}}
+  addUserKnob {7 haperture R 0 50}
+  haperture {{parent.haperture}}
+  addUserKnob {7 s l "focus distance" R 0 1000}
+  s {{parent.s}}
+ }
+ Dot {
+  name Dot3
+  note_font_size 42
+  note_font_color 0x7f7f7f01
+  xpos -556
+  ypos 522
+ }
+set N6c5d4400 [stack 0]
+ Expression {
+  temp_name0 dofrange
+  temp_expr0 0.9
+  channel0 {rgba.red -rgba.green -rgba.blue rgba.alpha}
+  expr0 "fabs(r) > dofrange ?  (fabs(r) - (r>0 ? r : 0)) : 0"
+  expr1 "fabs(r) < dofrange ? 1 : 0"
+  expr2 "fabs(r) > dofrange ? (r>0 ? r : 0) : 0"
+  name DepthMapColor
+  xpos -590
+  ypos 651
+ }
+ Dot {
+  name Dot2
+  note_font_size 42
+  note_font_color 0x7f7f7f01
+  xpos -556
+  ypos 1026
+ }
+set N6a8e3c00 [stack 0]
+ Input {
+  inputs 0
+  name InputFilter
+  label "\[value number]"
+  xpos 70
+  ypos -160
+  number 1
+ }
+ Reformat {
+  type scale
+  scale {1 {1/parent.aspect_ratio}}
+  resize distort
+  name _aspect_ratio_1
+  xpos 70
+  ypos 399
+ }
+ Read {
+  inputs 0
+  file_type exr
+  file //data/int-ham-lib-assets/ASSETS-ELEMENTS/_MACKEVISION/misc/Elements/Iris_Spots.exr
+  localizationPolicy on
+  format "288 288 0 0 288 288 1 "
+  origset true
+  name Read1
+  xpos 859
+  ypos 95
+  addUserKnob {20 Mackevision}
+  addUserKnob {4 versions l Versions: M {""}}
+  addUserKnob {26 missing l "Missing Frames:" T "not yet set"}
+  addUserKnob {22 checkVersions l "check for Versions" -STARTLINE T "x=nuke.thisNode()\nimport pyseq\nimport srNelper\nseq = pyseq.img2pyseq(x\['file'].evaluate())\nsrNelper.refresh(x,seq,versions=True)"}
+ }
+ Transform {
+  scale 1.16
+  center {114.5 114.5}
+  name Transform2
+  xpos 859
+  ypos 281
+ }
+ Reformat {
+  format "288 288 0 0 288 288 1 "
+  name Reformat3
+  xpos 859
+  ypos 318
+ }
+ Keyer {
+  operation "luminance key"
+  name Keyer1
+  xpos 859
+  ypos 356
+ }
+ Reformat {
+  inputs 0
+  format "288 288 0 0 288 288 1 "
+  name Reformat6
+  xpos 514
+  ypos 134
+ }
+ Noise {
+  size 31
+  center {960 540}
+  name Noise2
+  xpos 514
+  ypos 184
+ }
+ Blur {
+  channels rgba
+  size 10.5
+  name Blur1
+  xpos 514
+  ypos 210
+ }
+ Noise {
+  inputs 0
+  size 115
+  center {960 540}
+  name Noise1
+  xpos 665
+  ypos -59
+ }
+set N6cf58800 [stack 0]
+ Constant {
+  inputs 0
+  channels rgb
+  format "512 512 0 0 512 512 1 square_512"
+  name Constant1
+  xpos 383
+  ypos -258
+ }
+set N6cf58400 [stack 0]
+ Flare {
+  position {256 256}
+  radius {92.13 98.65 101.82}
+  size_mult 2.21
+  ring_color 0.27
+  inner_color 0
+  outer_falloff 0.52
+  corners {{parent.blades}}
+  flattening 1
+  sharpness 0.89
+  corners_angle {{parent.image_angle}}
+  name Flare6
+  xpos 501
+  ypos -29
+ }
+ Flare {
+  position {256 256}
+  radius {94.83 98.65 101.82}
+  size_mult 2.03
+  ring_color 0.27
+  inner_color 0
+  outer_falloff 0.52
+  corners {{parent.blades}}
+  flattening 1
+  sharpness 0.89
+  corners_angle {{parent.image_angle}}
+  name Flare7
+  xpos 501
+  ypos -3
+ }
+ Flare {
+  position {256 256}
+  radius {94.83 98.65 101.82}
+  size_mult 1.87
+  ring_color 0.27
+  inner_color 0
+  outer_falloff 0.52
+  corners {{parent.blades}}
+  flattening 1
+  sharpness 0.89
+  corners_angle {{parent.image_angle}}
+  name Flare8
+  xpos 501
+  ypos 23
+ }
+ Merge2 {
+  inputs 2
+  operation mask
+  bbox B
+  mix 0.205
+  name Merge5
+  xpos 501
+  ypos 69
+ }
+push $N6cf58400
+ Flare {
+  position {256 256}
+  radius {90.78 98.65 106.52}
+  size_mult 2.4
+  anamorph 1.03
+  ring_color 0.92
+  inner_color 0
+  outer_falloff 2.1
+  corners {{parent.blades}}
+  sharpness 1
+  corners_angle {{parent.image_angle}}
+  name Flare9
+  xpos 256
+  ypos -19
+ }
+push $N6cf58800
+push $N6cf58400
+ Flare {
+  position {256 256}
+  radius {92.13 98.65 101.82}
+  size_mult 2.1
+  inner_color 0.09
+  outer_falloff 0.52
+  corners {{parent.blades}}
+  flattening 1
+  sharpness 0.89
+  corners_angle {{parent.image_angle}}
+  name Flare3
+  xpos 498
+  ypos -153
+ }
+ Flare {
+  position {256 256}
+  radius {92.13 98.65 101.82}
+  size_mult 1.91
+  ring_color 0.32
+  inner_color 0.09
+  outer_falloff 0.52
+  corners {{parent.blades}}
+  flattening 1
+  sharpness 0.89
+  corners_angle {{parent.image_angle}}
+  name Flare4
+  xpos 498
+  ypos -127
+ }
+ Flare {
+  position {256 256}
+  radius {92.13 98.65 101.82}
+  size_mult 1.71
+  ring_color 0.27
+  inner_color 0.09
+  outer_falloff 0.52
+  corners {{parent.blades}}
+  flattening 1
+  sharpness 0.89
+  corners_angle {{parent.image_angle}}
+  name Flare5
+  xpos 498
+  ypos -101
+ }
+ Merge2 {
+  inputs 2
+  operation mask
+  bbox B
+  name Merge4
+  xpos 498
+  ypos -59
+ }
+push $N6cf58400
+ Flare {
+  position {256 256}
+  radius {90.78 98.65 106.52}
+  size_mult 2.3
+  corners {{parent.blades}}
+  flattening 1
+  sharpness 0.89
+  corners_angle {{parent.image_angle}}
+  name Flare2
+  xpos 383
+  ypos -139
+ }
+ Flare {
+  position {256 256}
+  radius {90.78 98.65 106.52}
+  size_mult 2.3
+  inner_color 0.51
+  corners {{parent.blades}}
+  flattening 1
+  sharpness 0.89
+  corners_angle {{parent.image_angle}}
+  name Flare1
+  xpos 383
+  ypos -113
+ }
+ Merge2 {
+  inputs 2
+  operation plus
+  bbox B
+  name Merge3
+  xpos 383
+  ypos -59
+ }
+ Grade {
+  inputs 1+1
+  white 3.45
+  maskChannelMask rgba.red
+  name Grade2
+  xpos 383
+  ypos 4
+ }
+ Grade {
+  inputs 1+1
+  white 0.003
+  maskChannelMask rgba.red
+  name Grade1
+  xpos 383
+  ypos 108
+ }
+ Transform {
+  skewX 0.02
+  skewY 0.01
+  center {256 256}
+  name Transform1
+  xpos 383
+  ypos 134
+ }
+ Reformat {
+  format "288 288 0 0 288 288 1 "
+  name Reformat2
+  xpos 383
+  ypos 168
+ }
+ Copy {
+  inputs 2
+  from0 rgba.red
+  to0 forward.u
+  from1 rgba.green
+  to1 forward.v
+  name Copy1
+  xpos 383
+  ypos 213
+ }
+ IDistort {
+  channels rgb
+  uv forward
+  uv_offset 0.295
+  uv_scale 4
+  name IDistort1
+  xpos 383
+  ypos 265
+ }
+ Merge2 {
+  inputs 2
+  operation mask
+  bbox B
+  name Merge2
+  xpos 383
+  ypos 362
+ }
+ Reformat {
+  type scale
+  scale {1 {1/parent.aspect_ratio}}
+  resize distort
+  name _aspect_ratio_3
+  xpos 383
+  ypos 411
+ }
+ Reformat {
+  format "288 288 0 0 288 288 1 "
+  resize fit
+  name Reformat5
+  xpos 383
+  ypos 454
+ }
+ Shuffle {
+  alpha red
+  name Shuffle2
+  label "\[value in]"
+  xpos 383
+  ypos 511
+ }
+ Switch {
+  inputs 2
+  which {{"\[exists parent.input1]"}}
+  name Switch3
+  xpos 70
+  ypos 519
+ }
+ Crop {
+  box {0 0 {input.width} {input.height}}
+  crop false
+  name Crop5
+  xpos 70
+  ypos 559
+ }
+ Reformat {
+  format "255 255 0 0 255 255 1 square_255"
+  resize fit
+  name Reformat4
+  xpos 70
+  ypos 585
+ }
+ Clamp {
+  maximum_enable false
+  name Clamp1
+  xpos 70
+  ypos 623
+ }
+set N4702e800 [stack 0]
+ Dot {
+  name Dot5
+  label " "
+  note_font "Helvetica Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold"
+  note_font_size 24
+  note_font_color 0xff000000
+  xpos 104
+  ypos 738
+ }
+push $N6a34a000
+ Dot {
+  name Dot4
+  label " "
+  note_font "Helvetica Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold Bold"
+  note_font_size 24
+  note_font_color 0xff000000
+  xpos -433
+  ypos 355
+ }
+push $N6c5d4400
+ Switch {
+  inputs 2
+  which {{parent.defocus_mode}}
+  name _ENABLE_PGBOKEH_1
+  xpos -467
+  ypos 519
+ }
+push $N6a34b800
+add_layer {opticalzdefocus opticalzdefocus.Z opticalzdefocus.red}
+ Copy {
+  inputs 2
+  from0 rgba.red
+  to0 opticalzdefocus.Z
+  bbox B
+  name _Copy_ZDepth_
+  xpos -260
+  ypos 513
+ }
+set N6c485800 [stack 0]
+ pgBokeh {
+  inputs 2  inputs 2  inputs 2  inputs 2  inputs 2  inputs 2  inputs 2  inputs 2  inputs 1+1  inputs 2
+  bokehChannels {{{parent._ZDEFOCUS_.channels}}}
+  depthChannel opticalzdefocus.Z
+  focalPlane {{parent.s}}
+  focusRegionSize 0
+  realWorldLens true
+  focalLength {{parent.f}}
+  fStop {{parent.N}}
+  worldScale {{"parent.depth_unit < 2 ? parent.depth_unit : parent.depth_unit - 1"}}
+  worldScaleMultiplier {{"parent.depth_unit == 2 ? 10 : 1"}}
+  filmFormat Custom
+  apertureWidth {{parent.haperture}}
+  apertureHeight {{parent.haperture/(root.width/root.height)}}
+  kernelType Input
+  max_kernelsize 200
+  expandBBoxToMaxKernelSize true
+  kAspectRatio {{parent.aspect_ratio}}
+  kNumSides {{parent.blades}}
+  correctiveSlices {{parent.pgDepthSlices}}
+  name _pgBokeh_
+  xpos -398
+  ypos 734
+ 
+  xpos -398
+  ypos 734
+  selected false
+  disable false
+ 
+  xpos -398
+  ypos 734
+  selected false
+  disable false
+ 
+  xpos -398
+  ypos 734
+  selected false
+  disable false
+ 
+  xpos -398
+  ypos 734
+  selected false
+  disable false
+ 
+  xpos -398
+  ypos 734
+  selected false
+  disable false
+ 
+  xpos -398
+  ypos 734
+  selected false
+  disable false
+ 
+  xpos -398
+  ypos 734
+  selected false
+  disable false
+ 
+  xpos -398
+  ypos 734
+  selected false
+  disable false
+ 
+  xpos -398
+  ypos 734
+  selected false
+  disable false
+ }
+push $N4702e800
+push $N6c485800
+ ZDefocus2 {
+  inputs 2
+  channels rgba
+  z_channel opticalzdefocus.Z
+  math direct
+  focal_point {16540 12700}
+  blur_dof false
+  size 1
+  max_size 30
+  filter_type image
+  legacy_resize_mode false
+  show_legacy_resize_mode false
+  filter_channel rgba.red
+  aspect {{parent.aspect_ratio}}
+  blades {{parent.blades}}
+  roundness {{parent.roundness}}
+  rotation 64
+  inner_size 1
+  inner_brightness 1
+  catadioptric_size 0.375
+  name _ZDEFOCUS_
+  xpos -260
+  ypos 623
+  disable true
+ }
+ Switch {
+  inputs 2
+  which {{parent.defocus_mode}}
+  name _ENABLE_PGBOKEH_
+  xpos -260
+  ypos 903
+  disable true
+ }
+ Remove {
+  channels {opticalzdefocus.Z -opticalzdefocus.red}
+  name Remove1
+  xpos -260
+  ypos 945
+  disable true
+ }
+set N6c484400 [stack 0]
+ Switch {
+  inputs 2
+  which {{parent.show_coc}}
+  name _SHOW_COC_
+  xpos -350
+  ypos 1022
+ }
+push $N6a8e3c00
+push $N6c484400
+ Merge2 {
+  inputs 2
+  operation copy
+  bbox B
+  name Merge6
+  xpos -260
+  ypos 1078
+ }
+ Output {
+  name Output1
+  xpos -260
+  ypos 1239
+ }
+end_group
+set N6a59d200 [stack 0]
+Shuffle {
+ in opticalzdefocus
+ green red
+ blue red
+ alpha red
+ name Shuffle2
+ label "\[value in]"
+ xpos -904
+ ypos -14
+}
+Expression {
+ expr0 r*-1
+ expr1 g*-1
+ expr2 b*-1
+ name Expression1
+ xpos -904
+ ypos 24
+}
+set N6c4af000 [stack 0]
+push $N6a59d200
+push $N6c3e5c00
+Copy {
+ inputs 2
+ from0 opticalzdefocus.Z
+ to0 depth.Z
+ name Copy3
+ xpos -1108
+ ypos -33
+}
+ZDefocus2 {
+ channels rgba
+ math direct
+ blur_dof false
+ size 1
+ max_size 20
+ layers 13
+ legacy_resize_mode false
+ show_legacy_resize_mode false
+ name ZDefocus3
+ xpos -1108
+ ypos 149
+}
+push $N6c3e5c00
+Constant {
+ inputs 0
+ channels rgb
+ format "100 100 0 0 100 100 1 bokeh"
+ name Constant2
+ xpos -442
+ ypos -74
+}
+Flare {
+ position {50 50}
+ radius {42.23 45.56 49}
+ corners 6
+ sharpness 0.106
+ corners_angle -58
+ name Flare1
+ xpos -442
+ ypos 1
+}
+Shuffle {
+ name Shuffle1
+ xpos -442
+ ypos 27
+}
+push $N6c4af000
+push $N6c3e5c00
+BlinkScript {
+ inputs 3
+ kernelSourceFile C:/Users/lukas/Desktop/kernel/bokeh_8a_ls.cpp
+ recompileCount 420
+ KernelDescription "2 \"Bokeh\" iterate pixelWise e463b1ec81398ddc87f5e0021690629b64be966ddb0d5e329455cbb6bdef9c28 4 \"src\" Read Ranged2D \"depth\" Read Ranged2D \"bokeh\" Read Random \"result\" Write Point 7 \"Resolution\" Int 2 gAcAADgEAAA= \"strength\" Float 1 AACAPw== \"Cat\" Float 1 AACAPw== \"Maximum Depth Size\" Float 1 AAAgQQ== \"Minimum Depth Size\" Float 1 AAAgwQ== \"clampSlice\" Int 1 AQAAAA== \"TestSlice\" Int 1 AQAAAA== 7 \"res\" 2 1 \"CatEye_Strength\" 1 1 \"CatEye_Scale\" 1 1 \"maxDepthSize\" 1 1 \"minDepthSize\" 1 1 \"clampSlice\" 1 1 \"TestSlice\" 1 1 12 \"srcrangeMin\" Int 2 1 AAAAAAAAAAA= \"srcrangeMax\" Int 2 1 AAAAAAAAAAA= \"depthrangeMin\" Int 2 1 AAAAAAAAAAA= \"depthrangeMax\" Int 2 1 AAAAAAAAAAA= \"bokehconstEdgeColor\" Float 4 1 AAAAAAAAAAAAAAAAAAAAAA== \"bokehOffset\" Int 2 1 AAAAAAAAAAA= \"bokehMax\" Float 1 1 AAAAAA== \"convolveSize\" Int 1 1 AAAAAA== \"min_convolveSize\" Int 1 1 AAAAAA== \"res_max\" Float 1 1 AAAAAA== \"maxSlice\" Int 1 1 AAAAAA== \"minSlice\" Int 1 1 AAAAAA=="
+ kernelSource "kernel Bokeh : public ImageComputationKernel<ePixelWise>\n\{\n  Image<eRead, eAccessRanged2D, eEdgeClamped> src;\n  Image<eRead, eAccessRanged2D, eEdgeClamped> depth;\n  Image<eRead, eAccessRandom, eEdgeConstant> bokeh;\n  Image<eWrite> result;\n\n  local:\n  int2 bokehOffset;\n  float bokehMax;\n  int convolveSize;\n  int min_convolveSize;\n  float res_max;\n\n  int maxSlice;\n  int minSlice;\n\n  param:\n  int2 res;\n\n  float CatEye_Strength;\n  float CatEye_Scale;\n  float maxDepthSize;\n  float minDepthSize;\n\n  int clampSlice;\n\n  int TestSlice;\n\n\n  void define() \{\n    defineParam(CatEye_Strength, \"strength\", 1.0f);\n    defineParam(CatEye_Scale, \"Cat\",  1.0f);\n\n    defineParam(maxDepthSize, \"Maximum Depth Size\", 10.0f);\n    defineParam(minDepthSize, \"Minimum Depth Size\", -10.0f);\n\n    defineParam(TestSlice, \"TestSlice\", 1);\n\n    defineParam(res, \"Resolution\", int2(1920, 1080));\n\n    defineParam(clampSlice, \"clampSlice\",  1);\n  \}\n\n  void init()\{\n    convolveSize = (int)ceil(max(maxDepthSize,fabs(minDepthSize)));\n\n    maxSlice = ceil(maxDepthSize);\n    minSlice = floor(minDepthSize);\n\n    //Store the offset of the bottom-left corner of the filter image\n    bokehOffset = (bokeh.bounds.width()/2, bokeh.bounds.height()/2);\n    bokehMax = max(bokeh.bounds.width(), bokeh.bounds.height());\n\n    //max size\n    res_max = max(res.y,res.x);\n\n    //source Image range\n    src.setRange(-convolveSize, convolveSize);\n    depth.setRange(-convolveSize, convolveSize);\n  \}\n\n  void process(int2 pos) \{\n\n    // set rgba\n    SampleType(src) value(0);\n\n    //bokeh\n    value = bokeh_filter(pos);\n\n    //write back\n    result() = value;\n  \}\n\n  float4 bokeh_filter(int2 pos) \{\n\n    // CatEye\n    float2 Cat;\n    float2 offset;\n    float2 direction;\n    float strength;\n\n    //Bokeh\n    SampleType(src) valueSum(0);\n    ValueType(bokeh) bokehSum(0);\n    ValueType(bokeh) AlphaSum(0);\n\n\n    //Depth values\n    float zTarValue(0);\n    float zValue = floor(clamp((depth(0,0,0)), minDepthSize, maxDepthSize));\n\n    //Bokeh Position\n    float2 xyBokeh;\n\n    //Distance to Corner\n    float CornerDist = length((float2)(res.x/res_max,res.y/res_max));\n\n    //Bokeh max Corner\n    float CatEyeCornerDist = length((float2)(bokeh.bounds.width()/bokehMax,bokeh.bounds.height()/bokehMax));\n\n    //CatEyeSize\n    float CatEye_Size = CatEyeCornerDist * CatEye_Scale;\n\n\n    // Pixel Position\n    offset.x = (float)(pos.x *2  - res.x) /res_max;\n    offset.y = (float)(pos.y *2  - res.y) /res_max;\n\n    // Relative Position + Gradient\n    direction = normalize(offset);\n    strength = fabs(length(offset)) / CornerDist ;\n\n    // is sharp?\n    int inFocus;\n\n    //Color Stuff\n    float4 RGB;\n    SampleType(src) combine(0);\n    SampleType(src) test(0);\n\n    // for(int s = TestSlice; s == TestSlice; s++) \{\n    for(int s = minSlice; s <= maxSlice - clampSlice; s++) \{\n\n      //current Slice\n      int CurSlice = (int)fabs(s); //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n      //reset for next slice\n      float  counterAlphaHit = 0;\n      float  counterAlphaNoHit = 0;\n      float hits = 0;\n      float alpha = 0;\n      int setColor = 0;\n\n      valueSum = 0;\n      bokehSum = 0;\n\n      float4 bokeh_Color;\n      float bokeh_val;\n\n      //Blur 0 ?\n      if(zValue == 0 && s == 0 )\{\n        inFocus =1;\n      \}\n\n      else\{\n\n        inFocus = 0;\n\n        for(int y = -maxSlice; y < maxSlice; y++) \{\n          for(int x = -maxSlice; x < maxSlice; x++) \{\n\n            if (s <= 0) \{ // focus to infinity\n\n              //Load Target Depth value\n              zTarValue = clamp(depth(x,y,0), minDepthSize, maxDepthSize);\n\n              if (fabs(zTarValue) > x || fabs(zTarValue) > y)\{\n                // Scale Bokeh\n                xyBokeh.x = (((float)(x) / maxSlice *-1) / (fabs(zTarValue)/maxSlice) +1) *  (bokehOffset.x);\n                xyBokeh.y = (((float)(y) / maxSlice *-1) / (fabs(zTarValue)/maxSlice) +1) *  (bokehOffset.y);\n\n                //Clamp max Bokeh position value\n                xyBokeh.x = clamp(xyBokeh.x, 0.0f,(float)(bokeh.bounds.width()));\n                xyBokeh.y = clamp(xyBokeh.y, 0.0f,(float)(bokeh.bounds.height()));\n\n                bokeh_Color = bilinear(bokeh, xyBokeh.x, xyBokeh.y);\n\n                bokeh_val = (bokeh_Color.x*0.299   + bokeh_Color.y *0.587 + bokeh_Color.z*0.114   \t);\n\n                if(bokeh_val > 0)\{\n                  if(zTarValue -  s >= 0)\{\n\n\n                    Cat.x = ((float)(x) / maxSlice)/ (fabs(zTarValue)/maxSlice) + (direction.x * strength * CatEye_Strength* CatEye_Size *  CornerDist );\n                    Cat.y = ((float)(y) / maxSlice)/ (fabs(zTarValue)/maxSlice) + (direction.y * strength * CatEye_Strength* CatEye_Size *  CornerDist );\n\n                    if(length(Cat) < CatEye_Size)\{\n                      if(zTarValue -  s < 1)\{\n\n\n\n                        if (zTarValue -  s < 1)\{\n\n                          valueSum += bokeh_Color * src(x,y);\n                        \}\n\n                        else\{\n\n                          valueSum += bokeh_Color * src(0,0);\n                        \}\n\n                        bokehSum += bokeh_val;\n                        counterAlphaHit += 1;\n                      \}\n                    \}\n\n                    else\{\n                      counterAlphaNoHit += 1;\n                    \}\n                  \}\n                  else\{\n                    counterAlphaNoHit += 1;\n                  \}\n                \}\n              \}\n            \} // end focus to infinity\n\n\n\n\n            if(s >= 0) \{ // cam to focus\n\n              float distanceToTarValue = length(float2(x,y));\n              // float savedTarValue = 0;\n              float extendZTarValue = 0;\n              int extendPixel = 0;\n              int extendPixelDone = 0;\n              float extendOffset = 1.0f;\n\n              //Load Target Depth value\n              zTarValue = clamp(depth(x,y,0), minDepthSize, maxDepthSize);\n\n              if (depth(0,0,0) > s+extendOffset && src(x,y,3) > 0.0f && distanceToTarValue+extendOffset <= depth(0,0,0) && distanceToTarValue > zTarValue && zTarValue - (float)s > 0 && zTarValue - (float)s <= 1.0f ) \{\n\n                extendZTarValue = distanceToTarValue+extendOffset;\n                zTarValue = max(zTarValue,4.0f);\n                extendPixel = 1;\n              \}\n\n              if (fabs(zTarValue) > x || fabs(zTarValue) > y)\{\n                // Scale Bokeh\n                xyBokeh.x = (((float)(x) / maxSlice *-1) / (fabs(zTarValue)/maxSlice) +1) *  (bokehOffset.x);\n                xyBokeh.y = (((float)(y) / maxSlice *-1) / (fabs(zTarValue)/maxSlice) +1) *  (bokehOffset.y);\n\n                //Clamp max Bokeh position value\n\n                bokeh_Color = bilinear(bokeh, xyBokeh.x, xyBokeh.y);\n\n                bokeh_val = (bokeh_Color.x*0.299   + bokeh_Color.y *0.587 + bokeh_Color.z*0.114   \t);\n                if(bokeh_val > 0) \{\n                  if(((float)zTarValue -  (float)s > -1.0f && (float)zTarValue - (float)s <= 0))\{\n\n\n                    Cat.x = ((float)(x) / maxSlice)/ (fabs(zTarValue)/maxSlice) + (direction.x * strength * CatEye_Strength* CatEye_Size *  CornerDist );\n                    Cat.y = ((float)(y) / maxSlice)/ (fabs(zTarValue)/maxSlice) + (direction.y * strength * CatEye_Strength* CatEye_Size *  CornerDist );\n\n                    if(length(Cat) < CatEye_Size)\{\n\n                      valueSum += bokeh_Color * src(x,y);\n                      bokehSum += bokeh_val;\n                      if (extendPixel == 1) \{\n                        extendPixelDone = 1;\n                      \}\n\n                      counterAlphaHit += 1;\n\n                    \}\n\n\n                  \}\n                \}\n\n              \}\n\n\n\n              // extend below original blur\n              if ((fabs(extendZTarValue) > x || fabs(extendZTarValue) > y) && extendPixel == 1 && extendPixelDone == 0)\{\n                // Scale Bokeh\n                xyBokeh.x = (((float)(x) / maxSlice *-1) / (fabs(extendZTarValue)/maxSlice) +1) *  (bokehOffset.x);\n                xyBokeh.y = (((float)(y) / maxSlice *-1) / (fabs(extendZTarValue)/maxSlice) +1) *  (bokehOffset.y);\n\n\n                bokeh_Color = bilinear(bokeh, xyBokeh.x, xyBokeh.y);\n\n                bokeh_val = (bokeh_Color.x*0.299   + bokeh_Color.y *0.587 + bokeh_Color.z*0.114   \t);\n                if(bokeh_val > 0) \{\n                  if(((float)extendZTarValue -  (float)s > -1.0f+extendOffset && (float)extendZTarValue - (float)s <= 0+extendOffset) || extendPixel == 1)\{\n\n\n                    Cat.x = ((float)(x) / maxSlice)/ (fabs(extendZTarValue)/maxSlice) + (direction.x * strength * CatEye_Strength* CatEye_Size *  CornerDist );\n                    Cat.y = ((float)(y) / maxSlice)/ (fabs(extendZTarValue)/maxSlice) + (direction.y * strength * CatEye_Strength* CatEye_Size *  CornerDist );\n\n                    if(length(Cat) < CatEye_Size)\{\n\n                      valueSum += bokeh_Color * src(x,y);\n                      bokehSum += bokeh_val;\n\n                      counterAlphaHit += 1;\n\n                    \}\n\n\n                  \}\n                \}\n\n\n              \}\n              // if ((zTarValue < s-1 && distanceToTarValue <=s) || (extendPixel==1) || (extendPixel == 1 && (zTarValue - (float)s <= -1.0f+extendOffset || zTarValue  - (float)s > 0+extendOffset))) \{\n\n              // if ((zTarValue < s-1 && distanceToTarValue <=s) || (extendPixel == 0 && zTarValue > s+1 && distanceToTarValue <= s) ) \{\n              if ((zTarValue < s-1 && distanceToTarValue <=s)  ) \{\n                counterAlphaNoHit += 1;\n              \}\n            \}\n\n\n          \}\n        \}\n      \}\n\n\n      if(inFocus == 1)\{\n        setColor = 1;\n\n        alpha = 1.0f;\n        RGB = src(0,0);\n      \}\n      else\{\n\n        if (bokehSum != 0)\{\n          setColor = 1;\n\n          alpha = 1-(counterAlphaNoHit / (counterAlphaHit+counterAlphaNoHit));\n          RGB = valueSum / bokehSum ;\n\n\n        \}\n      \}\n\n      if(setColor ==  1)\{\n\n        //premultiplied\n        combine.w = alpha +  combine.w *(1.0 - alpha);\n        combine.x = (RGB.x * alpha +  combine.x  * (1.0f-alpha));\n        combine.y = (RGB.y * alpha +  combine.y  * (1.0f-alpha));\n        combine.z = (RGB.z * alpha +  combine.z  * (1.0f-alpha));\n\n        // combine.x = counterAlphaHit;\n        // combine.y = counterAlphaNoHit;\n        //unpremultiplied\n        //combine.w = alpha + 1 *(1.0 - alpha);\n        //combine.x = (RGB.x * alpha +  combine.x * combine.w*(1.0f-alpha)) / combine.w;\n        //combine.y = (RGB.y * alpha +  combine.y * combine.w*(1.0f-alpha)) / combine.w;\n        //combine.z = (RGB.z * alpha +  combine.z * combine.w*(1.0f-alpha)) / combine.w;\n      \}\n    \}\n\n    return combine\t;\n  \}\n\};\n"
+ rebuild ""
+ "Bokeh_Maximum Depth Size" 15
+ "Bokeh_Minimum Depth Size" -2
+ Bokeh_clampSlice 0
+ rebuild_finalise ""
+ name BlinkScript3
+ xpos -671
+ ypos 149
+}
+push 0
+Viewer {
+ inputs 10
+ frame_range 1-100
+ fps 25
+ input_number 1
+ colour_sample_bbox {0.01250000019 -0.1979166716 0.01354166679 -0.196875006}
+ viewerProcess "sRGB (ACES)"
+ name Viewer1
+ selected true
+ xpos 252
+ ypos 28
+}

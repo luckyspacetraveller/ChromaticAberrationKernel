@@ -1,0 +1,171 @@
+#! C:/Program Files/Nuke11.3v2/nuke-11.3.2.dll -nx
+#write_info Write1 file:"C:/Users/lukas/Desktop/mandelbrot/mandelbrot_%04d.tif" format:"1920 1080 1" chans:":rgba.red:rgba.green:rgba.blue:" framerange:"1 1000" fps:"0" colorspace:"Output - sRGB" datatype:"8 bit" transfer:"unknown" views:"main" colorManagement:"OCIO"
+version 11.3 v2
+define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
+<layout version="1.0">
+    <window x="0" y="0" w="2528" h="1362" screen="0">
+        <splitter orientation="1">
+            <split size="168"/>
+            <dock id="" hideTitles="1" activePageId="Toolbar.1">
+                <page id="Toolbar.1"/>
+            </dock>
+            <split size="1737" stretch="1"/>
+            <splitter orientation="2">
+                <split size="771"/>
+                <dock id="" activePageId="Viewer.1">
+                    <page id="Viewer.1"/>
+                </dock>
+                <split size="543"/>
+                <dock id="" activePageId="DAG.1" focus="true">
+                    <page id="DAG.1"/>
+                    <page id="Curve Editor.1"/>
+                    <page id="DopeSheet.1"/>
+                </dock>
+            </splitter>
+            <split size="615"/>
+            <dock id="" activePageId="Properties.1">
+                <page id="Properties.1"/>
+                <page id="uk.co.thefoundry.backgroundrenderview.1"/>
+                <page id="uk.co.thefoundry.scripteditor.2"/>
+            </dock>
+        </splitter>
+    </window>
+</layout>
+}
+Root {
+ inputs 0
+ name C:/Users/lukas/Desktop/mandelbrot.nk
+ frame 196
+ last_frame 1000
+ fps 25
+ format "1920 1080 0 0 1920 1080 1 HD_1080"
+ proxy_type scale
+ proxy_format "1024 778 0 0 1024 778 1 1K_Super_35(full-ap)"
+ colorManagement OCIO
+ OCIO_config custom
+ customOCIOConfigPath C:/Users/lukas/.nuke/_ACES/aces_1.0.3_L/config.ocio
+ defaultViewerLUT "OCIO LUTs"
+ workingSpaceLUT "ACES - ACEScg"
+ monitorLut ACES/sRGB
+ int8Lut "Utility - sRGB - Texture"
+ int16Lut "ACES - ACEScc"
+ logLut "Input - ADX - ADX10"
+ floatLut "ACES - ACEScg"
+}
+Mandelbrot {
+ inputs 0
+ format "3840 2160 0 0 3840 2160 1 UHD_4K"
+ scale {{pow(1.1,frame)}}
+ pivotx 1920
+ pivoty 1080
+ offsetx -0.77199979
+ offsety -0.10401094
+ Iterations 11000
+ name Mandelbrot1
+ xpos 228
+ ypos -220
+ postage_stamp false
+}
+set N22921000 [stack 0]
+Reformat {
+ name Reformat1
+ xpos 228
+ ypos -170
+}
+Grade {
+ whitepoint {{parent.Mandelbrot1.Iterations}}
+ multiply 1.56
+ gamma 0.67
+ name Grade1
+ xpos 228
+ ypos -113
+}
+set N22920400 [stack 0]
+Write {
+ file C:/Users/lukas/Desktop/mandelbrot/mandelbrot_####.tif
+ colorspace "Output - sRGB"
+ file_type tiff
+ compression LZW
+ checkHashOnRead false
+ version 1
+ name Write1
+ xpos 228
+ ypos -33
+}
+Read {
+ inputs 0
+ file_type tiff
+ file C:/Users/lukas/Desktop/mandelbrot/mandelbrot_####.tif
+ format "1920 1080 0 0 1920 1080 1 HD_1080"
+ last 428
+ origlast 428
+ origset true
+ colorspace "Output - sRGB"
+ name Read1
+ xpos 441
+ ypos -88
+}
+Grade {
+ blackpoint 0.001
+ name Grade2
+ xpos 441
+ ypos 10
+}
+Mandelbrot {
+ inputs 0
+ scale {{pow(1.1,frame)}}
+ pivotx 960
+ pivoty 540
+ offsetx -0.77210279
+ offsety -0.10401094
+ name Mandelbrot2
+ xpos 989
+ ypos -285
+ postage_stamp false
+}
+Grade {
+ blackpoint 36
+ whitepoint 1500
+ gamma 0.205
+ name Grade3
+ xpos 989
+ ypos -213
+}
+push $N22921000
+BlinkScript {
+ recompileCount 1
+ ProgramGroup 1
+ KernelDescription "2 \"Mandelbrot\" iterate componentWise 0c39babd3463415b9635a1e7a98b876f52b2c2f92255bf46b35dc46fc9809065 2 \"imageIn\" Read Ranged2D \"imageOut\" Write Point 3 \"Scale\" Float 1 zczMPQ== \"Pivot\" Float 2 AAAAAAAAAAA= \"Offset\" Float 2 AAAAAAAAAAA= 3 \"scale\" 1 1 \"pivot\" 2 1 \"offset\" 2 1 2 \"imageInrangeMin\" Int 2 1 AAAAAAAAAAA= \"imageInrangeMax\" Int 2 1 AAAAAAAAAAA="
+ kernelSource "kernel Mandelbrot : public ImageComputationKernel<eComponentWise>\n\{\n  Image<eRead, eAccessRanged2D, eEdgeClamped> imageIn;\n  Image<eWrite, eAccessPoint> imageOut;\n\n  local:\n\n  param:\n\n  float scale;\n  float2 pivot;\n  float2 offset;\n\n  void define() \{\n\n      defineParam(scale, \"Scale\", 0.1f);\n      defineParam(pivot, \"Pivot\", float2(0.0f,0.0f));\n      defineParam(offset, \"Offset\", float2(0.0f,0.0f));\n\n  \}\n\n  void init()\n  \{\n  \}\n\n  void process(int2 pos)\n  \{\n      float posX = (float)pos.x - pivot.x;\n      float posY = (float)pos.y - pivot.y;\n      posX = posX / (float)scale + offset.x;\n      posY = posY / (float)scale + offset.y;\n      float zR = 0;\n      float zX = 0;\n      float zR_old = 0;\n      int count = 0;\n      for(int i = 0 ; i < 1500; i ++ )\{\n          if(zR < 2 )\{\n              zR = pow(zR,2)+(pow(zX,2)*-1)+posX;\n              zX = 2*zR_old*zX+posY;\n              zR_old = zR;\n              count=i;\n          \}\n          else \{\n              imageOut() = count;\n              return;\n          \}\n      \}\n\n      imageOut() = count;\n  \}\n\};"
+ rebuild ""
+ Mandelbrot_Scale {{pow(1.1,frame)}}
+ Mandelbrot_Pivot {1920 1080}
+ Mandelbrot_Offset {-0.769 -0.1022}
+ rebuild_finalise ""
+ name BlinkScript1
+ xpos 495
+ ypos -268
+}
+Grade {
+ blackpoint 36
+ whitepoint 1500
+ gamma 0.205
+ name Grade4
+ xpos 495
+ ypos -199
+}
+push $N22920400
+push $N22920400
+push 0
+Viewer {
+ inputs 3
+ frame 196
+ frame_range 1-495
+ frame_range_lock true
+ fps 25
+ input_number 1
+ viewerProcess "sRGB (ACES)"
+ name Viewer1
+ xpos -40
+ ypos -10
+}

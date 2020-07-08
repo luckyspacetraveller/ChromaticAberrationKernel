@@ -1,0 +1,102 @@
+#! C:/Program Files/Nuke11.3v1/nuke-11.3.1.dll -nx
+version 11.3 v1
+define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
+<layout version="1.0">
+    <window x="0" y="0" w="2544" h="1401" screen="0">
+        <splitter orientation="1">
+            <split size="70"/>
+            <dock id="" hideTitles="1" activePageId="Toolbar.1">
+                <page id="Toolbar.1"/>
+            </dock>
+            <split size="1851" stretch="1"/>
+            <splitter orientation="2">
+                <split size="794"/>
+                <dock id="" activePageId="Viewer.1">
+                    <page id="Viewer.1"/>
+                </dock>
+                <split size="559"/>
+                <dock id="" activePageId="DAG.1">
+                    <page id="DAG.1"/>
+                    <page id="Curve Editor.1"/>
+                    <page id="DopeSheet.1"/>
+                </dock>
+            </splitter>
+            <split size="615"/>
+            <dock id="" activePageId="Properties.1" focus="true">
+                <page id="Properties.1"/>
+                <page id="uk.co.thefoundry.backgroundrenderview.1"/>
+            </dock>
+        </splitter>
+    </window>
+</layout>
+}
+Root {
+ inputs 0
+ name C:/Users/lukas/Desktop/kernel/kerneltest.nk
+ fps 25
+ format "1920 1080 0 0 1920 1080 1 HD_1080"
+ proxy_type scale
+ proxy_format "1024 778 0 0 1024 778 1 1K_Super_35(full-ap)"
+ colorManagement OCIO
+ OCIO_config custom
+ customOCIOConfigPath C:/Users/lukas/.nuke/_ACES/aces_1.0.3_L/config.ocio
+ defaultViewerLUT "OCIO LUTs"
+ workingSpaceLUT "ACES - ACEScg"
+ monitorLut ACES/sRGB
+ int8Lut "Utility - sRGB - Texture"
+ int16Lut "ACES - ACEScc"
+ logLut "Input - ADX - ADX10"
+ floatLut "ACES - ACEScg"
+}
+NoOp {
+ inputs 0
+ name NoOp1
+ xpos 979
+ ypos -99
+ addUserKnob {20 User}
+ addUserKnob {7 double R -500 500}
+ double 275
+ addUserKnob {7 double_1 R -500 500}
+ double_1 -275
+ addUserKnob {7 double_2 R -500 500}
+ double_2 -60
+}
+CheckerBoard2 {
+ inputs 0
+ name CheckerBoard1
+ xpos 416
+ ypos -242
+}
+set Nbc911800 [stack 0]
+BlinkScript {
+ kernelSourceFile C:/Users/lukas/Desktop/kernel/scale.cpp
+ recompileCount 1
+ KernelDescription "2 \"RotateImage123\" iterate pixelWise 2b7cf042537e44b1e3e036508922f06dedde8ecb9ed07df94873f8b06b9c6bf0 2 \"src\" Read Random \"dst\" Write Point 1 \"shift\" Float 3 AAAAAAAAAAAAAAAAAAAAAA== 1 \"shift\" 3 1 1 \"srcconstEdgeColor\" Float 4 1 AAAAAAAAAAAAAAAAAAAAAA=="
+ kernelSource "kernel RotateImage123 : ImageComputationKernel<ePixelWise>\n\{\n  Image<eRead, eAccessRandom, eEdgeConstant> src;\n  Image<eWrite, eAccessPoint> dst;\n\nparam:\n\n  float3 shift;\n\n  void define() \{\n    defineParam(shift, \"shift\", float3(0));\n\n  \}\n\n  void init() \{\n\n  \}\n\n  void process(int2 pos) \{\n\n    dst(0) = src(pos.x+(int)shift.x,pos.y,0);\n    dst(1) = src(pos.x+(int)shift.y,pos.y,1);\n    dst(2) = src(pos.x+(int)shift.z,pos.y,2);\n\n  \}\n\};\n"
+ rebuild ""
+ RotateImage123_shift {{parent.NoOp1.double} {parent.NoOp1.double_1} {parent.NoOp1.double_2}}
+ rebuild_finalise ""
+ name BlinkScript1
+ xpos 614
+ ypos -123
+}
+set Nbc910000 [stack 0]
+push $Nbc911800
+BlinkTry {
+ value {{parent.NoOp1.double} {parent.NoOp1.double_1} {parent.NoOp1.double_2}}
+ name BlinkTry1
+ xpos 416
+ ypos -98
+}
+push $Nbc910000
+Viewer {
+ inputs 3
+ frame 1
+ frame_range 1-100
+ fps 25
+ viewerProcess "sRGB (ACES)"
+ name Viewer1
+ selected true
+ xpos -40
+ ypos -10
+}
